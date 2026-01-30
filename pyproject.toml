@@ -1,0 +1,28 @@
+[project]
+name = "reminder-bot"
+version = "0.1.0"
+description = "Telegram reminder bot (PocketFlow + APScheduler)"
+authors = [
+    {name = "georgolden"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pocketflow (>=0.0.3,<0.0.4)",
+    "python-telegram-bot (>=22.6,<23.0)",
+    "apscheduler (>=3.11.2,<4.0.0)",
+    "pytz (>=2024.2)",
+    "openai (>=2.14.0,<3.0.0)"
+]
+
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+isort = "^6.0.1"
+flake8 = "^7.1.2"
+pytest = "^8.3.5"

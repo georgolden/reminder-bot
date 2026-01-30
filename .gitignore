@@ -1,0 +1,12 @@
+
+data/
+*.db
+.DS_Store
+.env
+.idea/
+# OS / editor
+*.pyc
+__pycache__/
+# runtime data (NEVER COMMIT)
+.venv/
+.vscode/
