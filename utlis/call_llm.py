@@ -14,7 +14,7 @@ def call_llm(messages: list[dict]) -> str:
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=messages,
-        temperature=1
+        temperature=0.3,
     )
 
     return response.choices[0].message.content
@@ -33,6 +33,7 @@ def call_llm_with_tools(messages: list[dict], tools: list[dict]) -> ChatCompleti
         messages=messages,
         tools=tools,
         tool_choice="auto",
+        temperature=0.3,
     )
 
     return response.choices[0].message
