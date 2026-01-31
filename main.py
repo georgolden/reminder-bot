@@ -27,7 +27,17 @@ from utils import (
 reminder_flow = create_reminder_flow()
 
 # Store for conversation state (user_id -> conversation history)
+# We keep a fixed-size rolling window of recent messages per user.
+# One "turn" is user+assistant, so 10 turns == 20 messages.
+MAX_CONVERSATION_MESSAGES = 20
 conversations: dict[str, list[dict]] = {}
+
+
+def _trim_conversation(conv: list[dict]) -> list[dict]:
+    """Keep only the most recent MAX_CONVERSATION_MESSAGES messages."""
+    if len(conv) <= MAX_CONVERSATION_MESSAGES:
+        return conv
+    return conv[-MAX_CONVERSATION_MESSAGES:]
 
 
 async def send_reminder(chat_id: str, text: str, reminder_id: str, app: Application, schedule_type: str = "once"):
@@ -106,6 +116,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"\n[Bot] Message from {user_id}: {message}")
 
     conversation = conversations.get(user_id, [])
+    conversation = _trim_conversation(conversation)
 
     shared = {
         "user_id": user_id,
@@ -128,12 +139,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = shared.get("response", "Something went wrong.")
         await update.message.reply_text(response)
 
-        if shared.get("needs_reply"):
-            conversation.append({"role": "user", "content": message})
-            conversation.append({"role": "assistant", "content": f"[Asked: {response}]"})
-            conversations[user_id] = conversation
-        else:
-            conversations.pop(user_id, None)
+        # Always update conversation history (fixed-size rolling window).
+        # Include both user + assistant messages regardless of needs_reply.
+        conversation.append({"role": "user", "content": message})
+        conversation.append({"role": "assistant", "content": response})
+        conversations[user_id] = _trim_conversation(conversation)
 
     except Exception as e:
         print(f"[Bot] Error: {e}")

@@ -33,6 +33,57 @@ poetry install --no-root
 poetry run python main.py
 ```
 
+## Running in Production
+
+### Systemd Service (Linux)
+
+1) Create an env file (recommended):
+
+Create `/etc/reminder-bot.env` (permissions `0600`) with:
+
+```bash
+TELEGRAM_BOT_TOKEN=...   # required
+DEEPSEEK_API_KEY=...     # required
+# DEFAULT_TIMEZONE=UTC   # optional
+```
+
+2) Create the systemd unit:
+
+Create `/etc/systemd/system/reminder-bot.service`:
+
+```ini
+[Unit]
+Description=Telegram Reminder Bot
+After=network.target
+
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/reminder-bot
+EnvironmentFile=/etc/reminder-bot.env
+ExecStart=/path/to/poetry run python main.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+3) Enable + start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable reminder-bot
+sudo systemctl start reminder-bot
+
+# logs
+journalctl -u reminder-bot -f
+```
+
+Notes:
+- Ensure `WorkingDirectory` points at the repo root so relative paths (like `data/`) resolve correctly.
+- Keep secrets out of the unit file; use `EnvironmentFile=`.
+
 ## Project structure
 - `main.py` — Telegram bot entry point
 - `flow.py` / `nodes.py` / `tools.py` — PocketFlow agent logic

@@ -184,10 +184,13 @@ class ParseInput(Node):
     
     def post(self, shared: dict[str, Any], prep_res: Any, exec_res: dict[str, Any]) -> str:
         shared["original_message"] = exec_res["message"]
-        # Preserve existing conversation, don't reset it!
-        if "conversation" not in shared or not shared["conversation"]:
-            shared["conversation"] = exec_res.get("conversation", [])
-        print(f"[ParseInput] User {exec_res['user_id']}: {exec_res['message']} (conversation: {len(shared['conversation'])} msgs)")
+        # Preserve existing conversation passed from the caller.
+        # This should be a rolling window of recent messages (user+assistant).
+        shared["conversation"] = exec_res.get("conversation", [])
+        print(
+            f"[ParseInput] User {exec_res['user_id']}: {exec_res['message']} "
+            f"(conversation: {len(shared['conversation'])} msgs)"
+        )
         return "default"
 
 
@@ -247,8 +250,10 @@ class DecideAction(Node):
         
         messages = [{"role": "system", "content": system_prompt}]
         
-        # Add conversation history (last 4 messages max to avoid pollution)
-        conversation = inputs["conversation"][-4:] if inputs["conversation"] else []
+        # Add conversation history (fixed-size rolling window provided by main.py)
+        # We keep it bounded to reduce prompt pollution while preserving context.
+        MAX_CONTEXT_MESSAGES = 20  # 10 turns (user+assistant)
+        conversation = inputs["conversation"][-MAX_CONTEXT_MESSAGES:] if inputs["conversation"] else []
         for msg in conversation:
             messages.append(msg)
         
@@ -264,15 +269,31 @@ class DecideAction(Node):
         # Call LLM with tools
         response = call_llm_with_tools(messages, TOOLS)
         
-        if not response.tool_calls:
-            raise Exception("LLM did not call any tool!")
+        # Fallback: if the model returns a normal assistant message without tool calls,
+        # treat it as the final response instead of crashing.
+        if not getattr(response, "tool_calls", None):
+            return {"assistant_reply": response.content or ""}
         
         # Return first tool call (DeepSeek doesn't support parallel)
         return response.tool_calls[0]
     
     def post(self, shared: dict[str, Any], prep_res: dict[str, Any], exec_res: Any) -> str:
+        # Tool-call fallback: accept a normal assistant reply.
+        if isinstance(exec_res, dict) and "assistant_reply" in exec_res:
+            shared["response"] = exec_res.get("assistant_reply", "").strip() or "(no response)"
+            shared["needs_reply"] = False
+            print("[DecideAction] No tool_calls; returning assistant reply directly")
+            return "done"
+
         # Handle single tool call
         tool_calls = exec_res if isinstance(exec_res, list) else [exec_res]
+
+        # Defensive: avoid crashing on empty tool_calls.
+        if not tool_calls or tool_calls[0] is None:
+            shared["response"] = "(no response)"
+            shared["needs_reply"] = False
+            print("[DecideAction] Empty tool_calls; ending flow")
+            return "done"
         
         # Take first tool call (DeepSeek doesn't support parallel)
         tc = tool_calls[0]
